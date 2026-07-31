@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+env/
+venv/
+.venv/
+pip-wheel-metadata/
+.python-version
+.Python
+
+# dbt
+target/
+dbt_modules/
+logs/
+manifest.json
+run_results.json
+catalog.json
+packages/
+packages.lock
+dbt_packages/
+profiles.yml
+profiles.yml.enc
+
+# Snowflake / local environment
+.env
+.env.*
+secrets.yml
+*.pem
+*.key
+
+# IDE / OS
+.vscode/
+.idea/
+*.iml
+.DS_Store
