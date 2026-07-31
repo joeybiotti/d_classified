@@ -6,23 +6,31 @@ env/
 venv/
 .venv/
 pip-wheel-metadata/
-.python-version
 .Python
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # dbt
 target/
 dbt_modules/
+dbt_packages/
 logs/
 manifest.json
 run_results.json
 catalog.json
-packages/
 packages.lock
-dbt_packages/
 profiles.yml
 profiles.yml.enc
 
-# Snowflake / local environment
+# Data / DuckDB
+*.duckdb
+*.duckdb.wal
+data/*.csv
+!data/.gitkeep
+
+# Snowflake / secrets
 .env
 .env.*
 secrets.yml
