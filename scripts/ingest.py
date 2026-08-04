@@ -1,10 +1,9 @@
 import os
 from datetime import datetime, timezone
-from pathlib import Path
 
-import duckdb
 import pandas as pd
 import requests
+import snowflake.connector
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,8 +11,14 @@ load_dotenv()
 API_ID = os.getenv('ADZUNA_APP_ID')
 API_KEY = os.getenv('ADZUNA_APP_KEY')
 
-BASE_DIR = Path(__file__).parent.parent
-DB_PATH = BASE_DIR / 'd_classified.duckdb'
+SNOWFLAKE_CONFIG = {
+    'account': os.getenv('SNOWFLAKE_ACCOUNT'),
+    'user': os.getenv('SNOWFLAKE_USER'),
+    'password': os.getenv('SNOWFLAKE_PASSWORD'),
+    'warehouse': os.getenv('SNOWFLAKE_WAREHOUSE'),
+    'database': os.getenv('SNOWFLAKE_DATABASE'),
+    'schema': os.getenv('SNOWFLAKE_SCHEMA'),
+}
 
 COUNTRY = 'us'
 SEARCH_TERMS = ['analytics engineer', 'data engineer', 'sql developer']
@@ -60,7 +65,7 @@ def run_ingest():
         print('Error: ADZUNA_APP_ID / ADZUNA_APP_KEY not set in .env')
         return
 
-    loaded_at = datetime.now(timezone.utc)
+    loaded_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     all_postings = []
 
     for term in SEARCH_TERMS:
@@ -72,16 +77,37 @@ def run_ingest():
     df = flatten(all_postings, loaded_at)
     print(f'Total postings this run: {len(df)}')
 
-    with duckdb.connect(str(DB_PATH)) as conn:
-        conn.execute('CREATE SCHEMA IF NOT EXISTS raw;')
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS raw.postings AS
-            SELECT * FROM df LIMIT 0
+    conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
+    try:
+        cursor = conn.cursor()
+        cursor.execute('USE DATABASE D_CLASSIFIED')
+        cursor.execute('USE SCHEMA RAW')
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS postings (
+                posting_id STRING,
+                title STRING,
+                company STRING,
+                location STRING,
+                salary_min FLOAT,
+                salary_max FLOAT,
+                description STRING,
+                created STRING,
+                category STRING,
+                redirect_url STRING,
+                loaded_at TIMESTAMP_NTZ
+            )
         """)
-        conn.execute('INSERT INTO raw.postings SELECT * FROM df')
+        from snowflake.connector.pandas_tools import write_pandas
 
-        total_rows = conn.execute('SELECT count(*) FROM raw.postings').fetchone()[0]
-        print(f'Success. raw.postings now has {total_rows} total rows across all runs.')
+        df.columns = df.columns.str.upper()
+        _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS')
+        print(f'Success. Inserted {nrows} rows this time')
+
+        cursor.execute('SELECT count(*) FROM postings')
+        total_rows = cursor.fetchone()[0]
+        print(f'posting table now has {total_rows} total rows across all runs.')
+    finally:
+        conn.close()
 
 
 if __name__ == '__main__':
