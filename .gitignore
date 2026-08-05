@@ -21,6 +21,7 @@ manifest.json
 run_results.json
 catalog.json
 packages.lock
+package-lock.yml
 profiles.yml
 profiles.yml.enc
 
