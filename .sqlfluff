@@ -1,0 +1,37 @@
+[sqlfluff]
+dialect = snowflake
+templater = dbt
+exclude_rules = structure.column_order, layout.end_of_file
+
+[sqlfluff:templater:dbt]
+project_dir = .
+profiles_dir = .
+
+[sqlfluff:indentation]
+tab_width = 4
+indented_joins = False
+template_blocks_indent = False
+
+[sqlfluff:rules:capitalisation.keywords]
+capitalisation_policy = lower
+
+[sqlfluff:rules:aliasing.column]
+aliasing_column = explicit
+
+[sqlfluff:rules:layout.select_targets]
+wildcard_policy = single
+
+[sqlfluff:rules:references.consistent]
+force_enable = False
+
+[sqlfluff:rules:ambiguous.column_count]
+max_columns = 100
+
+[sqlfluff:rules:structure.column_order]
+force_enable = False
+
+[sqlfluff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = consistent
+
+[sqlfluff:rules:jinja.padding]
+single_space = False

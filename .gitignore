@@ -43,3 +43,4 @@ secrets.yml
 .idea/
 *.iml
 .DS_Store
+.user.yml
