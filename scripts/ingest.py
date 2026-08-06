@@ -137,9 +137,39 @@ def run_ingest():
                 loaded_at TIMESTAMP_NTZ
             )
         """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS postings_staging (
+                posting_id STRING,
+                title STRING,
+                company STRING,
+                location STRING,
+                salary_min FLOAT,
+                salary_max FLOAT,
+                description STRING,
+                created STRING,
+                category STRING,
+                redirect_url STRING,
+                loaded_at TIMESTAMP_NTZ
+            )
+        """)
 
-        _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS', use_logical_type=True)
-        logger.info(f'Success. Inserted {nrows} rows this time')
+        _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS_STAGING', use_logical_type=True)
+        logger.info(f'Success. Inserted {nrows} rows to staging')
+        
+    
+        cursor.execute("""
+            MERGE INTO postings t
+            USING postings_staging s
+            ON t.posting_id = s.posting_id
+            WHEN NOT MATCHED THEN 
+            INSERT (posting_id, title, company, location, salary_min, salary_max, description, created, category, redirect_url, loaded_at)
+            VALUES (s.posting_id, s.title, s.company, s.location, s.salary_min, s.salary_max, s.description, s.created, s.category, s.redirect_url, s.loaded_at)
+        """)
+        logger.info(f'Merged staging into postings')
+
+   
+        cursor.execute('TRUNCATE TABLE postings_staging')
 
         cursor.execute('SELECT count(*) FROM postings')
         total_rows = cursor.fetchone()[0]
