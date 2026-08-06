@@ -1,3 +1,5 @@
+import time
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -5,8 +7,19 @@ import pandas as pd
 import requests
 import snowflake.connector
 from dotenv import load_dotenv
+from snowflake.connector.pandas_tools import write_pandas
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('d_classified.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 API_ID = os.getenv('ADZUNA_APP_ID')
 API_KEY = os.getenv('ADZUNA_APP_KEY')
@@ -26,17 +39,42 @@ RESULTS_PER_PAGE = 50
 
 
 def fetch_postings(what: str) -> list[dict]:
-    url = f'https://api.adzuna.com/v1/api/jobs/{COUNTRY}/search/1'
-    params = {
-        'app_id': API_ID,
-        'app_key': API_KEY,
-        'results_per_page': RESULTS_PER_PAGE,
-        'what': what,
-        'content-type': 'application/json',
-    }
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    return response.json().get('results', [])
+    all_results = []
+    page = 1
+    
+    while True:
+        url = f'https://api.adzuna.com/v1/api/jobs/{COUNTRY}/search/{page}'
+        params = {
+            'app_id': API_ID,
+            'app_key': API_KEY,
+            'results_per_page': RESULTS_PER_PAGE,
+            'what': what,
+            'content-type': 'application/json',
+        }
+        try:
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+        except requests.exceptions.Timeout:
+            logger.error(f'Timed out fetching postings for "{what}" page {page}.')
+            break
+        except requests.exceptions.RequestException as e:
+            logger.error(f'Request failed for "{what}" page {page}: {e}')
+            break
+
+        try:
+            data = response.json()
+            results = data.get('results', [])
+            all_results.extend(results)
+            
+            pagecount = data.get('pagecount', 1)
+            if page >= pagecount:
+                break
+            page += 1
+        except ValueError:
+            logger.error(f'Could not parse JSON response for "{what}" page {page}')
+            break
+    
+    return all_results
 
 
 def flatten(postings: list[dict], loaded_at: datetime) -> pd.DataFrame:
@@ -62,22 +100,39 @@ def flatten(postings: list[dict], loaded_at: datetime) -> pd.DataFrame:
 
 def run_ingest():
     if not API_ID or not API_KEY:
-        print('Error: ADZUNA_APP_ID / ADZUNA_APP_KEY not set in .env')
+        logger.error('Error: ADZUNA_APP_ID / ADZUNA_APP_KEY not set in .env')
+        return
+    
+    missing_sf_config = [k for k, v in SNOWFLAKE_CONFIG.items() if not v]
+    if missing_sf_config:
+        logger.error(f'Missing Snowflake config values: {missing_sf_config}')
         return
 
-    loaded_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    loaded_at = datetime.now(timezone.utc)
     all_postings = []
 
     for term in SEARCH_TERMS:
-        print(f'Fetching postings for {term}')
+        logger.info(f'Fetching postings for {term}')
         results = fetch_postings(term)
-        print(f'  {len(results)} results')
+        logger.info(f'  {len(results)} results')
         all_postings.extend(results)
+        time.sleep(1)
 
+    if not all_postings:
+        logger.warning('No postings fetched this run across all search terms. Skipping write.')
+        return
+        
     df = flatten(all_postings, loaded_at)
-    print(f'Total postings this run: {len(df)}')
+    df.columns = df.columns.str.upper()
+    logger.info(f'Total postings this run: {len(df)}')
 
-    conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
+    try:
+        conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
+    except snowflake.connector.errors.Error as e:
+        logger.error(f'Failed to connect to Snowflake: {e}')
+        return
+    
+    
     try:
         cursor = conn.cursor()
         cursor.execute('USE DATABASE D_CLASSIFIED')
@@ -97,18 +152,52 @@ def run_ingest():
                 loaded_at TIMESTAMP_NTZ
             )
         """)
-        from snowflake.connector.pandas_tools import write_pandas
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS postings_staging (
+                posting_id STRING,
+                title STRING,
+                company STRING,
+                location STRING,
+                salary_min FLOAT,
+                salary_max FLOAT,
+                description STRING,
+                created STRING,
+                category STRING,
+                redirect_url STRING,
+                loaded_at TIMESTAMP_NTZ
+            )
+        """)
 
-        df.columns = df.columns.str.upper()
-        _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS')
-        print(f'Success. Inserted {nrows} rows this time')
+        _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS_STAGING', use_logical_type=True)
+        logger.info(f'Success. Inserted {nrows} rows to staging')
+        
+    
+        cursor.execute("""
+            MERGE INTO postings t
+            USING postings_staging s
+            ON t.posting_id = s.posting_id
+            WHEN NOT MATCHED THEN 
+            INSERT (posting_id, title, company, location, salary_min, salary_max, description, created, category, redirect_url, loaded_at)
+            VALUES (s.posting_id, s.title, s.company, s.location, s.salary_min, s.salary_max, s.description, s.created, s.category, s.redirect_url, s.loaded_at)
+        """)
+        logger.info(f'Merged staging into postings')
+
+   
+        cursor.execute('TRUNCATE TABLE postings_staging')
 
         cursor.execute('SELECT count(*) FROM postings')
         total_rows = cursor.fetchone()[0]
-        print(f'posting table now has {total_rows} total rows across all runs.')
+        logger.info(f'posting table now has {total_rows} total rows across all runs.')
+    except snowflake.connector.errors.Error as e:
+        logger.error(f'Snowflake write failed: {e}')
     finally:
         conn.close()
 
 
 if __name__ == '__main__':
-    run_ingest()
+    try:
+        run_ingest()
+    except Exception as e:
+        logger.critical(f'Unhandled error: {e}', exc_info=True)
+        exit(1)
