@@ -38,29 +38,42 @@ RESULTS_PER_PAGE = 50
 
 
 def fetch_postings(what: str) -> list[dict]:
-    url = f'https://api.adzuna.com/v1/api/jobs/{COUNTRY}/search/1'
-    params = {
-        'app_id': API_ID,
-        'app_key': API_KEY,
-        'results_per_page': RESULTS_PER_PAGE,
-        'what': what,
-        'content-type': 'application/json',
-    }
-    try:
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-    except requests.exceptions.Timeout:
-        logger.error(f'Timed out fetching postings for "{what}".')
-        return []
-    except requests.exceptions.RequestException as e:
-        logger.error(f'Request failed for "{what}": {e}')
-        return []
+    all_results = []
+    page = 1
+    
+    while True:
+        url = f'https://api.adzuna.com/v1/api/jobs/{COUNTRY}/search/{page}'
+        params = {
+            'app_id': API_ID,
+            'app_key': API_KEY,
+            'results_per_page': RESULTS_PER_PAGE,
+            'what': what,
+            'content-type': 'application/json',
+        }
+        try:
+            response = requests.get(url, params=params, timeout=15)
+            response.raise_for_status()
+        except requests.exceptions.Timeout:
+            logger.error(f'Timed out fetching postings for "{what}" page {page}.')
+            break
+        except requests.exceptions.RequestException as e:
+            logger.error(f'Request failed for "{what}" page {page}: {e}')
+            break
 
-    try:
-        return response.json().get('results', [])
-    except ValueError:
-        logger.error(f'Could not parse JSON response for "{what}"')
-        return []
+        try:
+            data = response.json()
+            results = data.get('results', [])
+            all_results.extend(results)
+            
+            pagecount = data.get('pagecount', 1)
+            if page >= pagecount:
+                break
+            page += 1
+        except ValueError:
+            logger.error(f'Could not parse JSON response for "{what}" page {page}')
+            break
+    
+    return all_results
 
 
 def flatten(postings: list[dict], loaded_at: datetime) -> pd.DataFrame:
@@ -139,20 +152,20 @@ def run_ingest():
         """)
         
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS postings_staging (
-                posting_id STRING,
-                title STRING,
-                company STRING,
-                location STRING,
-                salary_min FLOAT,
-                salary_max FLOAT,
-                description STRING,
-                created STRING,
-                category STRING,
-                redirect_url STRING,
-                loaded_at TIMESTAMP_NTZ
-            )
-        """)
+        CREATE TABLE IF NOT EXISTS postings_staging (
+            posting_id STRING,
+            title STRING,
+            company STRING,
+            location STRING,
+            salary_min FLOAT,
+            salary_max FLOAT,
+            description STRING,
+            created STRING,
+            category STRING,
+            redirect_url STRING,
+            loaded_at TIMESTAMP_NTZ
+        )
+    """)
 
         _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS_STAGING', use_logical_type=True)
         logger.info(f'Success. Inserted {nrows} rows to staging')
@@ -181,4 +194,8 @@ def run_ingest():
 
 
 if __name__ == '__main__':
-    run_ingest()
+    try:
+        run_ingest()
+    except Exception as e:
+        logger.critical(f'Unhandled error: {e}', exc_info=True)
+        exit(1)
