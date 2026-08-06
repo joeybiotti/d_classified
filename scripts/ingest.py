@@ -1,3 +1,4 @@
+import time
 import logging
 import os
 from datetime import datetime, timezone
@@ -107,7 +108,7 @@ def run_ingest():
         logger.error(f'Missing Snowflake config values: {missing_sf_config}')
         return
 
-    loaded_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    loaded_at = datetime.now(timezone.utc)
     all_postings = []
 
     for term in SEARCH_TERMS:
@@ -115,6 +116,7 @@ def run_ingest():
         results = fetch_postings(term)
         logger.info(f'  {len(results)} results')
         all_postings.extend(results)
+        time.sleep(1)
 
     if not all_postings:
         logger.warning('No postings fetched this run across all search terms. Skipping write.')
@@ -152,20 +154,20 @@ def run_ingest():
         """)
         
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS postings_staging (
-            posting_id STRING,
-            title STRING,
-            company STRING,
-            location STRING,
-            salary_min FLOAT,
-            salary_max FLOAT,
-            description STRING,
-            created STRING,
-            category STRING,
-            redirect_url STRING,
-            loaded_at TIMESTAMP_NTZ
-        )
-    """)
+            CREATE TABLE IF NOT EXISTS postings_staging (
+                posting_id STRING,
+                title STRING,
+                company STRING,
+                location STRING,
+                salary_min FLOAT,
+                salary_max FLOAT,
+                description STRING,
+                created STRING,
+                category STRING,
+                redirect_url STRING,
+                loaded_at TIMESTAMP_NTZ
+            )
+        """)
 
         _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS_STAGING', use_logical_type=True)
         logger.info(f'Success. Inserted {nrows} rows to staging')
