@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -5,8 +6,15 @@ import pandas as pd
 import requests
 import snowflake.connector
 from dotenv import load_dotenv
+from snowflake.connector.pandas_tools import write_pandas
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 API_ID = os.getenv('ADZUNA_APP_ID')
 API_KEY = os.getenv('ADZUNA_APP_KEY')
@@ -34,9 +42,21 @@ def fetch_postings(what: str) -> list[dict]:
         'what': what,
         'content-type': 'application/json',
     }
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    return response.json().get('results', [])
+    try:
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+    except requests.exceptions.Timeout:
+        logger.error(f'Timed out fetching postings for "{what}".')
+        return []
+    except requests.exceptions.RequestException as e:
+        logger.error(f'Request failed for "{what}": {e}')
+        return []
+
+    try:
+        return response.json().get('results', [])
+    except ValueError:
+        logger.error(f'Could not parse JSON response for "{what}"')
+        return []
 
 
 def flatten(postings: list[dict], loaded_at: datetime) -> pd.DataFrame:
@@ -62,7 +82,12 @@ def flatten(postings: list[dict], loaded_at: datetime) -> pd.DataFrame:
 
 def run_ingest():
     if not API_ID or not API_KEY:
-        print('Error: ADZUNA_APP_ID / ADZUNA_APP_KEY not set in .env')
+        logger.error('Error: ADZUNA_APP_ID / ADZUNA_APP_KEY not set in .env')
+        return
+    
+    missing_sf_config = [k for k, v in SNOWFLAKE_CONFIG.items() if not v]
+    if missing_sf_config:
+        logger.error(f'Missing Snowflake config values: {missing_sf_config}')
         return
 
     loaded_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
@@ -74,10 +99,21 @@ def run_ingest():
         print(f'  {len(results)} results')
         all_postings.extend(results)
 
+    if not all_postings:
+        logger.warning('No postings fetched this run across all search terms. Skipping write.')
+        return
+        
     df = flatten(all_postings, loaded_at)
-    print(f'Total postings this run: {len(df)}')
+    df.columns = df.columns.str.upper()
+    logger.info(f'Total postings this run: {len(df)}')
 
-    conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
+    try:
+        conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
+    except snowflake.connector.errors.Error as e:
+        logger.error(f'Failed to connect to Snowflake: {e}')
+        return
+    
+    
     try:
         cursor = conn.cursor()
         cursor.execute('USE DATABASE D_CLASSIFIED')
@@ -97,15 +133,15 @@ def run_ingest():
                 loaded_at TIMESTAMP_NTZ
             )
         """)
-        from snowflake.connector.pandas_tools import write_pandas
 
-        df.columns = df.columns.str.upper()
-        _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS')
-        print(f'Success. Inserted {nrows} rows this time')
+        _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS', use_logical_type=True)
+        logger.info(f'Success. Inserted {nrows} rows this time')
 
         cursor.execute('SELECT count(*) FROM postings')
         total_rows = cursor.fetchone()[0]
-        print(f'posting table now has {total_rows} total rows across all runs.')
+        logger.info(f'posting table now has {total_rows} total rows across all runs.')
+    except snowflake.connector.errors.Error as e:
+        logger.error(f'Snowflake write failed: {e}')
     finally:
         conn.close()
 
