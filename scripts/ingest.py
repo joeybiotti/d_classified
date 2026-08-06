@@ -12,7 +12,11 @@ load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('d_classified.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -94,9 +98,9 @@ def run_ingest():
     all_postings = []
 
     for term in SEARCH_TERMS:
-        print(f'Fetching postings for {term}')
+        logger.info(f'Fetching postings for {term}')
         results = fetch_postings(term)
-        print(f'  {len(results)} results')
+        logger.info(f'  {len(results)} results')
         all_postings.extend(results)
 
     if not all_postings:
