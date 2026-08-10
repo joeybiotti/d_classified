@@ -14,10 +14,7 @@ load_dotenv()
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('d_classified.log'),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.FileHandler('d_classified.log'), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -41,7 +38,7 @@ RESULTS_PER_PAGE = 50
 def fetch_postings(what: str) -> list[dict]:
     all_results = []
     page = 1
-    
+
     while True:
         url = f'https://api.adzuna.com/v1/api/jobs/{COUNTRY}/search/{page}'
         params = {
@@ -65,7 +62,7 @@ def fetch_postings(what: str) -> list[dict]:
             data = response.json()
             results = data.get('results', [])
             all_results.extend(results)
-            
+
             pagecount = data.get('pagecount', 1)
             if page >= pagecount:
                 break
@@ -73,7 +70,7 @@ def fetch_postings(what: str) -> list[dict]:
         except ValueError:
             logger.error(f'Could not parse JSON response for "{what}" page {page}')
             break
-    
+
     return all_results
 
 
@@ -102,7 +99,7 @@ def run_ingest():
     if not API_ID or not API_KEY:
         logger.error('Error: ADZUNA_APP_ID / ADZUNA_APP_KEY not set in .env')
         return
-    
+
     missing_sf_config = [k for k, v in SNOWFLAKE_CONFIG.items() if not v]
     if missing_sf_config:
         logger.error(f'Missing Snowflake config values: {missing_sf_config}')
@@ -121,7 +118,7 @@ def run_ingest():
     if not all_postings:
         logger.warning('No postings fetched this run across all search terms. Skipping write.')
         return
-        
+
     df = flatten(all_postings, loaded_at)
     df.columns = df.columns.str.upper()
     logger.info(f'Total postings this run: {len(df)}')
@@ -131,8 +128,7 @@ def run_ingest():
     except snowflake.connector.errors.Error as e:
         logger.error(f'Failed to connect to Snowflake: {e}')
         return
-    
-    
+
     try:
         cursor = conn.cursor()
         cursor.execute('USE DATABASE D_CLASSIFIED')
@@ -152,7 +148,7 @@ def run_ingest():
                 loaded_at TIMESTAMP_NTZ
             )
         """)
-        
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS postings_staging (
                 posting_id STRING,
@@ -171,8 +167,7 @@ def run_ingest():
 
         _, _, nrows, _ = write_pandas(conn, df, 'POSTINGS_STAGING', use_logical_type=True)
         logger.info(f'Success. Inserted {nrows} rows to staging')
-        
-    
+
         cursor.execute("""
             MERGE INTO postings t
             USING postings_staging s
@@ -183,7 +178,6 @@ def run_ingest():
         """)
         logger.info(f'Merged staging into postings')
 
-   
         cursor.execute('TRUNCATE TABLE postings_staging')
 
         cursor.execute('SELECT count(*) FROM postings')
