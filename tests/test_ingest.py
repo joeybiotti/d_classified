@@ -102,25 +102,29 @@ def test_fetch_postings_invalid_json():
 
         assert results == []
 
+
 def test_run_ingest_missing_api_creds(monkeypatch):
     """Test that run_ingest exits if API credentials missing"""
     monkeypatch.setenv('ADZUNA_APP_ID', '')
     monkeypatch.setenv('ADZUNA_APP_KEY', '')
-    
+
     results = run_ingest()
-    
-    assert results is None 
-    
+
+    assert results is None
+
+
 def test_run_ingest_no_postings(monkeypatch):
     """Test that run_ingest exits if no postings fetched"""
     monkeypatch.setenv('ADZUNA_APP_ID', 'test')
     monkeypatch.setenv('ADZUNA_APP_KEY', 'test')
-    
+
     with patch('scripts.ingest.fetch_postings', return_value=[]):
         from scripts.ingest import run_ingest
+
         result = run_ingest()
-        
+
         assert result is None
+
 
 def test_run_ingest_full_flow(monkeypatch):
     """Test full run_ingest flow with mocked Snowflake"""
@@ -132,19 +136,20 @@ def test_run_ingest_full_flow(monkeypatch):
     monkeypatch.setenv('SNOWFLAKE_WAREHOUSE', 'test')
     monkeypatch.setenv('SNOWFLAKE_DATABASE', 'test')
     monkeypatch.setenv('SNOWFLAKE_SCHEMA', 'test')
-\
-    with patch('scripts.ingest.fetch_postings') as mock_fetch, \
-         patch('scripts.ingest.snowflake.connector.connect') as mock_conn, \
-         patch('scripts.ingest.write_pandas') as mock_write:
-        
+    with (
+        patch('scripts.ingest.fetch_postings') as mock_fetch,
+        patch('scripts.ingest.snowflake.connector.connect') as mock_conn,
+        patch('scripts.ingest.write_pandas') as mock_write,
+    ):
         mock_fetch.return_value = [{'id': '1', 'title': 'Job 1'}]
         mock_cursor = MagicMock()
         mock_conn.return_value.cursor.return_value = mock_cursor
         mock_write.return_value = (True, None, 1, None)
-        
+
         from scripts.ingest import run_ingest
+
         run_ingest()
-        
+
         mock_conn.assert_called_once()
         mock_write.assert_called_once()
         mock_cursor.execute.assert_any_call('TRUNCATE TABLE postings_staging')
