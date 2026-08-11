@@ -124,13 +124,28 @@ This enables historical salary/title analysis.
 - Clean error handling and logging
 - Test failures block deployment
 
+## Documentation
+
+View the dbt project documentation locally:
+
+```bash
+dbt docs generate
+dbt docs serve
+```
+
+Opens `http://localhost:8000` with:
+- **Lineage graph** — shows data flow from staging → intermediate → marts
+- **Model documentation** — column descriptions and data types
+- **Data tests** — what validations run on each model
+- **Source freshness** — when raw data was last loaded
+
 ## Next Steps
 
-- [ ] Add dbt docs: `dbt docs generate && dbt docs serve`
 - [ ] CI/CD pipeline (GitHub Actions)
 - [ ] Materialize marts as tables for performance
 - [ ] Add custom dbt macros for reusable logic
 - [ ] Snapshot company & category dimensions
+- [ ] Deploy dbt docs to GitHub Pages
 
 ## Dependencies
 
