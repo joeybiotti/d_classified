@@ -1,8 +1,8 @@
-with source as (
-    select * from {{ source('raw', 'postings') }}
+with snapshot_data as (
+    select * from {{ ref('snap_postings') }}
 ),
 
-renamed as (
+current_records as (
     select
         posting_id,
         title,
@@ -14,8 +14,11 @@ renamed as (
         created,
         category,
         redirect_url,
-        cast(loaded_at as timestamp_ntz) as loaded_at
-    from source
+        cast(loaded_at as timestamp_ntz) as loaded_at,
+        dbt_valid_from,
+        dbt_valid_to
+    from snapshot_data
+    where dbt_valid_to is null
 )
 
-select * from renamed
+select * from current_records
