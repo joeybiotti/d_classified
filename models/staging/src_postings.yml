@@ -1,8 +1,43 @@
 version: 2
 
-sources: 
+sources:
   - name: raw
     database: D_CLASSIFIED
     schema: raw
-    tables: 
+    tables:
       - name: postings
+        columns:
+          - name: posting_id
+            tests:
+              - not_null
+          - name: title
+            tests:
+              - not_null
+          - name: loaded_at
+            tests:
+              - not_null
+
+models:
+  - name: stg_postings
+    description: "Current job postings from Adzuna API (filtered snapshot)"
+    columns:
+      - name: posting_id
+        description: "Unique posting identifier"
+        tests:
+          - not_null
+      - name: title
+        description: "Job title"
+        tests:
+          - not_null
+
+  - name: int_postings_deduplicated
+    description: "Deduplicated postings (one per posting_id)"
+    columns:
+      - name: posting_id
+        description: "Unique posting identifier"
+        tests:
+          - unique
+          - not_null
+      - name: title
+        tests:
+          - not_null
