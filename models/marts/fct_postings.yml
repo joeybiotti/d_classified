@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: fct_postings
+    description: "Fact table of current job postings"
+    columns:
+      - name: posting_id
+        description: "Unique posting ID"
+      - name: title
+        description: "Job title"
+      - name: company
+        description: "Company name"
+      - name: salary_min
+        description: "Minimum salary in USD"
+      - name: salary_max
+        description: "Maximum salary in USD"
+      - name: category
+        description: "Job category"
+
+  - name: dim_companies
+    description: "Company dimension with posting stats"
+    columns:
+      - name: company
+        description: "Company name"
+      - name: posting_count
+        description: "Number of active postings"
+      - name: avg_salary_max
+        description: "Average max salary"
+
+  - name: dim_categories
+    description: "Job category dimension with stats"
+    columns:
+      - name: category
+        description: "Job category"
+      - name: posting_count
+        description: "Number of postings in category"
