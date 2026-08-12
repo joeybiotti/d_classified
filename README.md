@@ -9,9 +9,9 @@ Adzuna API
     ↓
 [Python Ingest] → Raw Snowflake Table
     ↓
-[dbt Snapshot] → SCD2 History Tracking
+[dbt Staging] → Cleaned & Typed Records
     ↓
-[dbt Staging] → Current Records Only
+[dbt Snapshot] → SCD2 History Tracking
     ↓
 [dbt Intermediate] → Enrichment & Deduplication
     ↓
@@ -35,6 +35,7 @@ Adzuna API
 - **Testing**: pytest, dbt tests
 - **Code Quality**: ruff (linting + formatting)
 - **Task Runner**: Make
+- **CI**: GitHub Actions
 
 ## Quick Start
 
@@ -60,6 +61,14 @@ dbt run       # Build all models
 dbt test      # Validate data quality
 ```
 
+### Generate a Chart
+
+```bash
+python scripts/visualize.py
+```
+
+Saves category/posting-volume charts to `assets/`.
+
 ### View Tests
 
 ```bash
@@ -72,31 +81,40 @@ dbt test --select fct_postings
 make help
 ```
 
+## Job Postings by Category
+
+![Postings by Category](assets/postings_by_category.png)
+
 ## Project Structure
 
 ```
 d_classified/
 ├── scripts/
-│   └── ingest.py              # Python ETL script
+│   ├── ingest.py               # Python ETL script
+│   └── visualize.py            # Chart generation
 ├── models/
-│   ├── staging/               # Raw data cleaning & casting
+│   ├── staging/                 # Raw data cleaning & casting
 │   │   └── stg_postings.sql
-│   ├── intermediate/          # Business logic & enrichment
+│   ├── intermediate/            # Business logic & enrichment
 │   │   ├── int_postings_deduplicated.sql
 │   │   └── int_postings_enriched.sql
-│   └── marts/                 # Analytics-ready tables
+│   └── marts/                   # Analytics-ready tables
 │       ├── fct_postings.sql
 │       ├── dim_companies.sql
 │       ├── dim_categories.sql
-│       └── agg_postings_by_category.sql
+│       ├── agg_postings_by_category.sql
+│       └── _metrics.yml         # Semantic layer metrics
 ├── snapshots/
-│   └── snap_postings.sql      # SCD2 snapshot for history
+│   └── snap_postings.sql        # SCD2 snapshot for history
 ├── tests/
-│   ├── test_ingest.py         # Python unit tests
+│   ├── test_ingest.py           # Python unit tests
 │   └── models/staging/src_postings.yml  # dbt data tests
-├── Makefile                   # Task automation
-├── dbt_project.yml            # dbt configuration
-└── requirements.txt           # Python dependencies
+├── .github/workflows/
+│   ├── tests.yml                # Python lint + pytest
+│   └── dbt-ci.yml               # dbt build validation
+├── Makefile                     # Task automation
+├── dbt_project.yml              # dbt configuration
+└── requirements.txt             # Python dependencies
 ```
 
 ## Key Features
@@ -110,19 +128,29 @@ Tracks all changes to job postings over time with:
 This enables historical salary/title analysis.
 
 ### Multi-Layer Transformation
-- **Staging**: Filters to current records, casts types
+- **Staging**: Cleans and casts raw fields, one row per ingested record
+- **Snapshot**: Captures point-in-time versions of each posting off staging, enabling SCD Type 2 history
 - **Intermediate**: Deduplicates, enriches with computed fields
 - **Marts**: Analytics tables (facts, dimensions, aggregates)
+
+### Semantic Layer
+Core metrics defined once and queryable consistently:
+- `avg_salary` — average salary midpoint across postings
+- `active_postings` — count of currently active postings
+
+```bash
+dbt sl query --metrics avg_salary --group-by metric_time__day
+```
 
 ### Data Quality
 - 8 dbt data tests covering uniqueness, not-null, freshness
 - 7 pytest unit tests for ingestion logic
 - Schema validation on Snowflake tables
 
-### CI-Ready
-- Makefile for consistent local/CI execution
-- Clean error handling and logging
-- Test failures block deployment
+### CI
+- `tests.yml` — lints and runs Python unit tests on every push/PR
+- `dbt-ci.yml` — validates the full dbt build against Snowflake on every push/PR
+- Test/build failures block merge
 
 ## Documentation
 
@@ -141,20 +169,13 @@ Opens `http://localhost:8000` with:
 
 ## Next Steps
 
-- [ ] CI/CD pipeline (GitHub Actions)
-- [ ] Materialize marts as tables for performance
-- [ ] Add custom dbt macros for reusable logic
-- [ ] Snapshot company & category dimensions
+- [ ] Airflow DAG to schedule recurring ingestion
 - [ ] Deploy dbt docs to GitHub Pages
+- [ ] Add custom dbt macros for reusable logic
 
 ## Dependencies
 
-See `requirements.txt`. Key packages:
-- dbt-snowflake==1.11.2
-- snowflake-connector-python==4.7.1
-- pandas==2.3.3
-- pytest==9.1.1
-- ruff==0.16.1
+See `requirements.txt` for exact pinned versions.
 
 ## Notes
 
