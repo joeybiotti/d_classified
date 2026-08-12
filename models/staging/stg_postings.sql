@@ -11,7 +11,7 @@ current_records as (
         salary_max,
         salary_min,
         description,
-        created,
+        cast(created as timestamp_ntz) as created,
         category,
         redirect_url,
         cast(loaded_at as timestamp_ntz) as loaded_at,

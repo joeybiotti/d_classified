@@ -1,0 +1,39 @@
+version: 2
+
+semantic_models:
+  - name: postings
+    model: ref('fct_postings')
+    defaults:
+      agg_time_dimension: created
+    entities:
+      - name: posting_id
+        type: primary
+      - name: company
+        type: foreign
+      - name: category
+        type: foreign
+    dimensions:
+      - name: created
+        type: time
+        type_params:
+          time_granularity: day
+    measures:
+      - name: salary_midpoint
+        agg: average
+        expr: (salary_min + salary_max) / 2
+      - name: posting_count
+        agg: count
+        expr: posting_id
+
+metrics:
+  - name: avg_salary
+    label: Average Salary
+    type: simple
+    type_params:
+      measure: salary_midpoint
+
+  - name: active_postings
+    label: Active Postings
+    type: simple
+    type_params:
+      measure: posting_count
