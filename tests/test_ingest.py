@@ -129,18 +129,20 @@ def test_run_ingest_no_postings(monkeypatch):
 
 def test_run_ingest_full_flow(monkeypatch):
     """Test full run_ingest flow with mocked Snowflake"""
-    monkeypatch.setenv('ADZUNA_APP_ID', 'test')
-    monkeypatch.setenv('ADZUNA_APP_KEY', 'test')
-    monkeypatch.setenv('SNOWFLAKE_ACCOUNT', 'test')
-    monkeypatch.setenv('SNOWFLAKE_USER', 'test')
-    monkeypatch.setenv('SNOWFLAKE_PASSWORD', 'test')
-    monkeypatch.setenv('SNOWFLAKE_WAREHOUSE', 'test')
-    monkeypatch.setenv('SNOWFLAKE_DATABASE', 'test')
-    monkeypatch.setenv('SNOWFLAKE_SCHEMA', 'test')
     with (
         patch('scripts.ingest.fetch_postings') as mock_fetch,
         patch('scripts.ingest.snowflake.connector.connect') as mock_conn,
         patch('scripts.ingest.write_pandas') as mock_write,
+        patch.dict('os.environ', {
+            'ADZUNA_APP_ID': 'test',
+            'ADZUNA_APP_KEY': 'test',
+            'SNOWFLAKE_ACCOUNT': 'test',
+            'SNOWFLAKE_USER': 'test',
+            'SNOWFLAKE_PASSWORD': 'test',
+            'SNOWFLAKE_WAREHOUSE': 'test',
+            'SNOWFLAKE_DATABASE': 'test',
+            'SNOWFLAKE_SCHEMA': 'test',
+        }),
     ):
         mock_fetch.return_value = [{'id': '1', 'title': 'Job 1'}]
         mock_cursor = MagicMock()
