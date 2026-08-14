@@ -24,8 +24,8 @@ jobs:
 
       - name: Set up dbt profile
         run: |
-          mkdir -p ./ci_profile
-          cat <<EOF > ./ci_profile/profiles.yml
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<EOF
           d_classified:
             target: ci
             outputs:
@@ -42,7 +42,7 @@ jobs:
           EOF
 
       - name: dbt deps
-        run: dbt deps --profiles-dir ./ci_profile
+        run: dbt deps
 
       - name: dbt build
-        run: dbt build --profiles-dir ./ci_profile
+        run: dbt build

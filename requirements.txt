@@ -86,7 +86,7 @@ rpds-py==2026.6.3
 ruff==0.16.1
 s3transfer==0.19.2
 six==1.17.0
-snowflake-connector-python==4.7.1
+snowflake-connector-python>=3.0.0
 snowplow-tracker==1.1.0
 sortedcontainers==2.4.0
 spinners==0.0.24
