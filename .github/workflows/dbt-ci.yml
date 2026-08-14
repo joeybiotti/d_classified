@@ -1,6 +1,8 @@
 name: dbt CI
 
 on:
+  pull_request:
+    branches: [master]
   push:
     branches: [master]
 
@@ -20,39 +22,33 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Set up dbt profile
-        env:
-          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      - name: Debug secrets presence
         run: |
-          echo "=== DEBUG: Checking env vars ==="
-          echo "Account: '$SNOWFLAKE_ACCOUNT'"
-          echo "User: '$SNOWFLAKE_USER'"
-          echo "Password length: ${#SNOWFLAKE_PASSWORD}"
-          
-          mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml <<EOF
+          echo "Account set: ${{ secrets.SNOWFLAKE_ACCOUNT != '' }}"
+          echo "User set: ${{ secrets.SNOWFLAKE_USER != '' }}"
+          echo "Password set: ${{ secrets.SNOWFLAKE_PASSWORD != '' }}"
+
+      - name: Set up dbt profile
+        run: |
+          mkdir -p ./ci_profile
+          cat <<EOF > ./ci_profile/profiles.yml
           d_classified:
             target: ci
             outputs:
               ci:
                 type: snowflake
-                account: ${SNOWFLAKE_ACCOUNT}
-                user: ${SNOWFLAKE_USER}
-                password: ${SNOWFLAKE_PASSWORD}
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
                 role: ACCOUNTADMIN
                 database: D_CLASSIFIED
                 warehouse: COMPUTE_WH
                 schema: STAGING
                 threads: 4
           EOF
-          
-          echo "=== DEBUG: profiles.yml content ==="
-          cat ~/.dbt/profiles.yml
 
       - name: dbt deps
-        run: dbt deps
+        run: dbt deps --profiles-dir ./ci_profile
 
       - name: dbt build
-        run: dbt build
+        run: dbt build --profiles-dir ./ci_profile

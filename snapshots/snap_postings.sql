@@ -4,13 +4,12 @@
         config(
             target_schema='snapshots',
             unique_key='posting_id',
-            strategy='timestamp',
-            updated_at='loaded_at'
+            strategy='check',
+            check_cols=['salary_min', 'salary_max', 'description'],
         )
     }}
 
-    select 
-        *
-    from {{ source('raw', 'postings') }}
+    select *
+    from {{ ref('int_postings_deduplicated') }}
 
 {% endsnapshot %}
