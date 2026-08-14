@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ ref('int_postings_deduplicated') }}
+    select * from {{ ref('int_postings_current') }}
 ),
 
 enriched as (
