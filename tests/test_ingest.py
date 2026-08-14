@@ -106,22 +106,31 @@ def test_fetch_postings_invalid_json():
 
 def test_run_ingest_missing_api_creds(monkeypatch):
     """Test that run_ingest exits if API credentials missing"""
-    monkeypatch.setenv('ADZUNA_APP_ID', '')
-    monkeypatch.setenv('ADZUNA_APP_KEY', '')
+    monkeypatch.setattr('scripts.ingest.API_ID', '')
+    monkeypatch.setattr('scripts.ingest.API_KEY', '')
 
-    results = run_ingest()
+    result = run_ingest()
 
-    assert results is None
+    assert result is None
 
 
 def test_run_ingest_no_postings(monkeypatch):
     """Test that run_ingest exits if no postings fetched"""
-    monkeypatch.setenv('ADZUNA_APP_ID', 'test')
-    monkeypatch.setenv('ADZUNA_APP_KEY', 'test')
+    monkeypatch.setattr('scripts.ingest.API_ID', 'test')
+    monkeypatch.setattr('scripts.ingest.API_KEY', 'test')
+    monkeypatch.setattr(
+        'scripts.ingest.SNOWFLAKE_CONFIG',
+        {
+            'account': 'test',
+            'user': 'test',
+            'password': 'test',
+            'warehouse': 'test',
+            'database': 'test',
+            'schema': 'test',
+        },
+    )
 
     with patch('scripts.ingest.fetch_postings', return_value=[]):
-        from scripts.ingest import run_ingest
-
         result = run_ingest()
 
         assert result is None
@@ -129,27 +138,29 @@ def test_run_ingest_no_postings(monkeypatch):
 
 def test_run_ingest_full_flow(monkeypatch):
     """Test full run_ingest flow with mocked Snowflake"""
+    monkeypatch.setattr('scripts.ingest.API_ID', 'test')
+    monkeypatch.setattr('scripts.ingest.API_KEY', 'test')
+    monkeypatch.setattr(
+        'scripts.ingest.SNOWFLAKE_CONFIG',
+        {
+            'account': 'test',
+            'user': 'test',
+            'password': 'test',
+            'warehouse': 'test',
+            'database': 'test',
+            'schema': 'test',
+        },
+    )
+
     with (
         patch('scripts.ingest.fetch_postings') as mock_fetch,
         patch('scripts.ingest.snowflake.connector.connect') as mock_conn,
         patch('scripts.ingest.write_pandas') as mock_write,
-        patch.dict('os.environ', {
-            'ADZUNA_APP_ID': 'test',
-            'ADZUNA_APP_KEY': 'test',
-            'SNOWFLAKE_ACCOUNT': 'test',
-            'SNOWFLAKE_USER': 'test',
-            'SNOWFLAKE_PASSWORD': 'test',
-            'SNOWFLAKE_WAREHOUSE': 'test',
-            'SNOWFLAKE_DATABASE': 'test',
-            'SNOWFLAKE_SCHEMA': 'test',
-        }),
     ):
         mock_fetch.return_value = [{'id': '1', 'title': 'Job 1'}]
         mock_cursor = MagicMock()
         mock_conn.return_value.cursor.return_value = mock_cursor
         mock_write.return_value = (True, None, 1, None)
-
-        from scripts.ingest import run_ingest
 
         run_ingest()
 

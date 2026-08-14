@@ -37,3 +37,10 @@ metrics:
     type: simple
     type_params:
       measure: posting_count
+
+time_spines:
+  - name: default
+    model: ref('metricflow_time_spine')
+    columns:
+      - name: date_day
+        granularity: day
