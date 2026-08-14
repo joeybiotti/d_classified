@@ -1,8 +1,6 @@
 name: dbt CI
 
 on:
-  pull_request:
-    branches: [master]
   push:
     branches: [master]
 
@@ -28,9 +26,6 @@ jobs:
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
         run: |
-          echo "Debug - Account: ${SNOWFLAKE_ACCOUNT}"
-          echo "Debug - User: ${SNOWFLAKE_USER}"
-          echo "Debug - Password length: ${#SNOWFLAKE_PASSWORD}"
           mkdir -p ~/.dbt
           cat > ~/.dbt/profiles.yml <<EOF
           d_classified:
@@ -47,7 +42,6 @@ jobs:
                 schema: STAGING
                 threads: 4
           EOF
-          cat ~/.dbt/profiles.yml
 
       - name: dbt deps
         run: dbt deps
