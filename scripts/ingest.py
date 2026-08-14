@@ -1,6 +1,7 @@
-import time
 import logging
 import os
+import sys
+import time
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -176,7 +177,7 @@ def run_ingest():
             INSERT (posting_id, title, company, location, salary_min, salary_max, description, created, category, redirect_url, loaded_at)
             VALUES (s.posting_id, s.title, s.company, s.location, s.salary_min, s.salary_max, s.description, s.created, s.category, s.redirect_url, s.loaded_at)
         """)
-        logger.info(f'Merged staging into postings')
+        logger.info('Merged staging into postings')
 
         cursor.execute('TRUNCATE TABLE postings_staging')
 
@@ -194,4 +195,4 @@ if __name__ == '__main__':
         run_ingest()
     except Exception as e:
         logger.critical(f'Unhandled error: {e}', exc_info=True)
-        exit(1)
+        sys.exit(1)

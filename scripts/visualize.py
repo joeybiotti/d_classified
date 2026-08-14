@@ -31,7 +31,7 @@ def fetch_category_data() -> pd.DataFrame:
 
 
 def plot_postings_by_category(df: pd.DataFrame):
-    fig, ax = plt.subplots(figsize=(10, 6))
+    _, ax = plt.subplots(figsize=(10, 6))
 
     df_sorted = df.sort_values('POSTING_COUNT', ascending=True)
     ax.barh(df_sorted['CATEGORY'], df_sorted['POSTING_COUNT'], color='#2E86AB')
