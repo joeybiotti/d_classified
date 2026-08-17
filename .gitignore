@@ -13,6 +13,11 @@ pip-wheel-metadata/
 htmlcov/
 *.log
 
+# Python packaging
+*.egg-info/
+dist/
+build/
+
 # dbt
 target/
 dbt_modules/
@@ -45,3 +50,16 @@ secrets.yml
 *.iml
 .DS_Store
 .user.yml
+
+# Airflow (local-only runtime artifacts)
+airflow/airflow.db
+airflow/airflow.db-journal
+airflow/logs/
+airflow/dags/__pycache__/
+airflow/plugins/__pycache__/
+airflow/webserver_config.py
+airflow/airflow.cfg
+airflow/unittests.cfg
+airflow/*.pid
+airflow/*.err
+airflow/*.out
