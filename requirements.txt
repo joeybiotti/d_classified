@@ -37,7 +37,7 @@ connexion==2.14.2
 cron-descriptor==1.4.3
 croniter==2.0.5
 cryptography==50.0.0
--e git+https://github.com/joeybiotti/d_classified.git@41f68b4739540985e506c1747a5da545112fdf9f#egg=d_classified
+-e git+https://github.com/joeybiotti/d_classified.git#egg=d_classified
 daff==1.4.2
 dbt-adapters==1.24.5
 dbt-common==1.39.0
