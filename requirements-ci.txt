@@ -1,0 +1,5 @@
+dbt-core==1.12.2
+dbt-snowflake==1.12.0
+metricflow==0.212.0
+python-dotenv==1.2.3
+requests==2.34.2
