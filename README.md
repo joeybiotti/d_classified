@@ -1,185 +1,221 @@
 # d_classified
 
-An end-to-end analytics engineering project demonstrating job posting ingestion, transformation, and analysis.
+An end‑to‑end analytics engineering project demonstrating modern ingestion, orchestration, transformation, history tracking, and metric modeling for job postings sourced from the **Adzuna API**.
 
-## Architecture
+---
 
-```
+## Architecture Overview
+
+```text
 Adzuna API
     ↓
-[Python Ingest] → Raw Snowflake Table
+Python Ingestion (scripts.ingest)
     ↓
-[dbt Staging] → Cleaned & Typed Records
+Snowflake → RAW.POSTINGS
     ↓
-[dbt Snapshot] → SCD2 History Tracking
+dbt Staging → Cleaned & Typed Records
     ↓
-[dbt Intermediate] → Enrichment & Deduplication
+dbt Intermediate → Deduplicated + Enriched
     ↓
-[dbt Marts] → Analytics-Ready Tables
+dbt Snapshot → SCD2 History Tracking
+    ↓
+dbt Intermediate → Current Valid Records
+    ↓
+dbt Marts → Analytics-Ready Tables
+    ↓
+MetricFlow Semantic Layer → Metrics (avg_salary, active_postings)
+
+* Orchestrated via Airflow (daily schedule).
 ```
 
-## What It Does
+---
 
-- **Ingests** job postings from Adzuna API via Python script
-- **Tracks history** with dbt snapshots (SCD Type 2) to capture salary/title changes over time
-- **Transforms** raw data through staging → intermediate → marts layers
-- **Enriches** postings with computed fields (salary midpoint, experience level)
-- **Aggregates** postings by category with salary statistics
-- **Tests** data quality at every layer (uniqueness, not-null, freshness)
+## What This Project Demonstrates
+
+* **Ingestion** of job postings from Adzuna via a packaged Python module
+* **Orchestration** with Airflow using a daily DAG
+* **Warehouse modeling** in Snowflake across `raw` → `staging` → `intermediate` → `marts`
+* **SCD Type 2 history tracking** via dbt snapshots
+* **Semantic metrics** defined in MetricFlow
+* **Data quality enforcement** with dbt tests + `pytest`
+* **CI/CD** validating Python + dbt builds on every push
+* **Modern Python packaging** using `pyproject.toml` + editable installs
+
+---
 
 ## Tech Stack
 
-- **Ingestion**: Python 3.12, requests, pandas, python-dotenv
-- **Warehouse**: Snowflake
-- **Transformation**: dbt 1.11.2, Jinja2
-- **Testing**: pytest, dbt tests
-- **Code Quality**: ruff (linting + formatting)
-- **Task Runner**: Make
-- **CI**: GitHub Actions
+| Category | Tooling / Technologies |
+| :--- | :--- |
+| **Ingestion** | Python 3.12, `requests`, `pandas`, `python-dotenv` |
+| **Orchestration** | Apache Airflow |
+| **Warehouse** | Snowflake |
+| **Transformation** | dbt 1.11.2, Jinja2, MetricFlow |
+| **Testing** | `pytest`, dbt tests |
+| **Code Quality** | `ruff` |
+| **Task Runner** | `Make` |
+| **CI/CD** | GitHub Actions |
+| **Packaging** | `pyproject.toml` + `pip install -e .` |
+
+---
 
 ## Quick Start
 
-### Setup
-
+### 1. Install Dependencies
 ```bash
 make install
 ```
+> Installs Python dependencies, your packaged ingestion module, and dbt dependencies.
 
-### Run Ingestion
-
+### 2. Run Ingestion Manually
 ```bash
 python scripts/ingest.py
 ```
+Fetches job postings from Adzuna and loads them into:
+`D_CLASSIFIED.RAW.POSTINGS`
 
-Fetches job postings from Adzuna API and writes to `raw.postings`.
-
-### Run Transformations
-
+### 3. Run Ingestion via Airflow
+The `d_classified_ingest` DAG runs daily. Start Airflow locally:
 ```bash
-dbt snapshot  # Capture SCD2 history
-dbt run       # Build all models
-dbt test      # Validate data quality
+airflow standalone
+```
+Your packaged ingestion module is imported via:
+```python
+from scripts.ingest import run_ingest
 ```
 
-### Generate a Chart
+### 4. Run dbt Transformations
+```bash
+dbt run --select stg_postings+
+dbt snapshot --select snap_postings
+dbt build
+```
 
+### 5. Query Metrics
+```bash
+mf query --metrics avg_salary --group-by metric_time__day
+mf list metrics
+```
+
+### 6. Generate Visualizations
 ```bash
 python scripts/visualize.py
 ```
+Outputs charts to `assets/`.
 
-Saves category/posting-volume charts to `assets/`.
-
-### View Tests
-
-```bash
-dbt test --select fct_postings
-```
-
-### All Available Commands
-
+### 7. All Commands
 ```bash
 make help
 ```
 
-## Job Postings by Category
+---
 
-![Postings by Category](assets/postings_by_category.png)
+## Visualizations
+
+### Job Postings by Category
+![Job Postings by Category](assets/postings_by_category.png)
+
+---
 
 ## Project Structure
 
-```
+```text
 d_classified/
+├── airflow/
+│   └── dags/
+│       └── d_classified_ingest.py      # Airflow DAG
 ├── scripts/
-│   ├── ingest.py               # Python ETL script
-│   └── visualize.py            # Chart generation
+│   ├── ingest.py                       # Python ingestion module
+│   └── visualize.py                    # Chart generation
 ├── models/
-│   ├── staging/                 # Raw data cleaning & casting
-│   │   └── stg_postings.sql
-│   ├── intermediate/            # Business logic & enrichment
-│   │   ├── int_postings_deduplicated.sql
-│   │   └── int_postings_enriched.sql
-│   └── marts/                   # Analytics-ready tables
-│       ├── fct_postings.sql
-│       ├── dim_companies.sql
-│       ├── dim_categories.sql
-│       ├── agg_postings_by_category.sql
-│       └── _metrics.yml         # Semantic layer metrics
-├── snapshots/
-│   └── snap_postings.sql        # SCD2 snapshot for history
+│   ├── staging/
+│   ├── intermediate/
+│   ├── marts/
+│   └── snapshots/
+├── assets/
+│   └── postings_by_category.png
 ├── tests/
-│   ├── test_ingest.py           # Python unit tests
-│   └── models/staging/src_postings.yml  # dbt data tests
-├── .github/workflows/
-│   ├── tests.yml                # Python lint + pytest
-│   └── dbt-ci.yml               # dbt build validation
-├── Makefile                     # Task automation
-├── dbt_project.yml              # dbt configuration
-└── requirements.txt             # Python dependencies
+│   ├── test_ingest.py
+│   └── models/
+├── pyproject.toml                      # Packaging metadata
+├── Makefile
+├── dbt_project.yml
+└── requirements.txt
 ```
+
+---
 
 ## Key Features
 
+### Deduplication Before History Tracking
+Raw data may contain multiple captures of the same posting. `int_postings_deduplicated` ensures:
+* **One row** per `posting_id`
+* **Latest capture** wins
+* **Snapshot** receives clean, stable input
+
+*This prevents snapshot churn and ensures accurate SCD2 history.*
+
 ### SCD Type 2 Snapshot
-Tracks all changes to job postings over time with:
-- `dbt_valid_from`: When version became active
-- `dbt_valid_to`: When version was superseded (NULL = current)
-- `dbt_scd_id`: Unique version identifier
+Tracks changes to:
+* `salary_min`
+* `salary_max`
+* `description`
 
-This enables historical salary/title analysis.
+**Snapshot fields:**
+* `dbt_valid_from`
+* `dbt_valid_to`
+* `dbt_scd_id`
 
-### Multi-Layer Transformation
-- **Staging**: Cleans and casts raw fields, one row per ingested record
-- **Snapshot**: Captures point-in-time versions of each posting off staging, enabling SCD Type 2 history
-- **Intermediate**: Deduplicates, enriches with computed fields
-- **Marts**: Analytics tables (facts, dimensions, aggregates)
+*This enables point‑in‑time analysis of job posting evolution.*
 
-### Semantic Layer
-Core metrics defined once and queryable consistently:
-- `avg_salary` — average salary midpoint across postings
-- `active_postings` — count of currently active postings
+### Multi‑Layer dbt Modeling
+* **Staging:** Cleaning + casting
+* **Deduplicated:** One row per posting
+* **Snapshot:** Historical versions
+* **Current:** Active postings
+* **Enriched:** Computed fields
+* **Marts:** Facts, dimensions, aggregates
 
+### Semantic Layer Metrics
+Defined once, queryable everywhere:
+* `avg_salary`
+* `active_postings`
+
+**Example:**
 ```bash
-dbt sl query --metrics avg_salary --group-by metric_time__day
+mf query --metrics avg_salary --group-by metric_time__day
 ```
 
 ### Data Quality
-- 8 dbt data tests covering uniqueness, not-null, freshness
-- 7 pytest unit tests for ingestion logic
-- Schema validation on Snowflake tables
+* **dbt tests:** Uniqueness, not‑null, freshness
+* **pytest:** Ingestion logic + Snowflake write mocks
+* **ruff:** Linting + formatting
 
-### CI
-- `tests.yml` — lints and runs Python unit tests on every push/PR
-- `dbt-ci.yml` — validates the full dbt build against Snowflake on every push/PR
-- Test/build failures block merge
+### CI/CD
+* Python lint + `pytest`
+* `dbt build` validation
+* *Failures block merge.*
+
+---
 
 ## Documentation
 
-View the dbt project documentation locally:
-
+Generate dbt docs:
 ```bash
 dbt docs generate
 dbt docs serve
 ```
+**Includes:**
+* Lineage graph
+* Model documentation
+* Tests & freshness
 
-Opens `http://localhost:8000` with:
-- **Lineage graph** — shows data flow from staging → intermediate → marts
-- **Model documentation** — column descriptions and data types
-- **Data tests** — what validations run on each model
-- **Source freshness** — when raw data was last loaded
+---
 
-## Next Steps
+## Notes & Environment Setup
 
-- [ ] Airflow DAG to schedule recurring ingestion
-- [ ] Deploy dbt docs to GitHub Pages
-- [ ] Add custom dbt macros for reusable logic
-
-## Dependencies
-
-See `requirements.txt` for exact pinned versions.
-
-## Notes
-
-- Requires Snowflake account & Adzuna API credentials (set in `.env`)
-- Raw data lives in `D_CLASSIFIED.RAW.POSTINGS`
-- Transformed data in `D_CLASSIFIED.STAGING/INTERMEDIATE/MARTS`
-- Snapshots in `D_CLASSIFIED.SNAPSHOTS`
+* Requires **Snowflake** + **Adzuna API** credentials in `.env`
+* **Raw Data:** `D_CLASSIFIED.RAW.POSTINGS`
+* **Transformed Data:** `D_CLASSIFIED.STAGING` / `INTERMEDIATE` / `MARTS`
+* **Snapshots:** `D_CLASSIFIED.SNAPSHOTS`
+* *See `requirements.txt` for pinned dependencies.*
